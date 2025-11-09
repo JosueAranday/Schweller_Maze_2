@@ -35,6 +35,11 @@ class MinPriorityQueue
 			return H.size();
 		}
 
+		bool empty()
+		{
+			return H.size() == 0;
+		}
+
 		// Pushes a new element x with priority p
 		// into the MinPriorityQueue.
 		//
