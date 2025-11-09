@@ -6,33 +6,98 @@
 #include <unordered_map>
 #include "solve.h"
 #include "vertex.h"
+#include "minpriorityqueue.h"
+
+// Trying to visualize the maze solving process
+#include <thread>   // For std::this_thread::sleep_for
+#include <chrono>   // For std::chrono::seconds and milliseconds
+#include <cstdlib>  // For system()
 
 using namespace std;
 
+// Function to clear the console screen
+void clearScreen() {
+#ifdef _WIN32
+	system("cls");
+#else
+	system("clear");
+#endif
+}
+
 string solve(string maze) {
 	unordered_map<int, Vertex*> vertexMap;
+	unordered_map< char, int > portalMap;	// Keep track of portals, number and counter 
 	size_t rowLength = maze.find('\n') + 1;
 	int counter = 0;
 	int xCoor = 0;
 	int yCoor = 0;
 	int xWidth = rowLength - 1;
 	int yHeight = 0;
+	int stdCost = 1;
+	int portalCost;
 
 	while (counter < maze.size()) {		// Runs in O(s) time
 		// Create vertices for each open space in the maze
+		portalCost = 1; // Reset portal cost
 		char curr = maze[counter];
 		if (curr == ' ') {
 			vertexMap[counter] = new Vertex(yCoor, xCoor);
-			if (xCoor > 0 && maze[counter - 1] == ' ') {		// Left neighbor
-				vertexMap[counter]->neighs.push_back(vertexMap[counter - 1]);
-				vertexMap[counter - 1]->neighs.push_back(vertexMap[counter]);
-
+			if (xCoor > 0){
+				if (maze[counter - 1] == ' ') {		// Left neighbor
+					vertexMap[counter]->neighs.push_back({vertexMap[counter - 1], stdCost });
+					vertexMap[counter - 1]->neighs.push_back({vertexMap[counter], stdCost });
+				}
+				else if (maze[counter - 1] >= '0' && maze[counter - 1] <= '9') {
+					// Left neighbor is a number
+					vertexMap[counter]->neighs.push_back({ vertexMap[counter - 1], stdCost });
+					vertexMap[counter - 1]->neighs.push_back({ vertexMap[counter], stdCost });
+				}
 			}
-			if (yCoor > 0 && maze[counter - rowLength] == ' ') {		// Top neighbor
-				vertexMap[counter]->neighs.push_back(vertexMap[counter - rowLength]);
-				vertexMap[counter - rowLength]->neighs.push_back(vertexMap[counter]);
+			if (yCoor > 0) {
+				if (maze[counter - rowLength] == ' ') {		// Top neighbor
+					vertexMap[counter]->neighs.push_back({ vertexMap[counter - rowLength], stdCost });
+					vertexMap[counter - rowLength]->neighs.push_back({ vertexMap[counter], stdCost });
+				}
+				else if (maze[counter - rowLength] >= '0' && maze[counter - rowLength] <= '9') {
+					// Top neighbor is a number
+					vertexMap[counter]->neighs.push_back({ vertexMap[counter - rowLength], stdCost });
+					vertexMap[counter - rowLength]->neighs.push_back({ vertexMap[counter], stdCost });
+				}
 			}
-			//solvedMaze += ' ';
+			xCoor++;
+		}
+		else if (curr >= '0' && curr <= '9') {
+			vertexMap[counter] = new Vertex(yCoor, xCoor);
+			portalCost = curr - '0'; // Portal cost based on number
+			if (xCoor > 0) {
+				if (maze[counter - 1] == ' ') {		// Left neighbor
+					vertexMap[counter]->neighs.push_back({ vertexMap[counter - 1], stdCost });
+					vertexMap[counter - 1]->neighs.push_back({ vertexMap[counter], stdCost });
+				}
+				else if (maze[counter - 1] >= '0' && maze[counter - 1] <= '9') {
+					// Left neighbor is a number
+					vertexMap[counter]->neighs.push_back({ vertexMap[counter - 1], stdCost });
+					vertexMap[counter - 1]->neighs.push_back({ vertexMap[counter], stdCost });
+				}
+			}
+			if (yCoor > 0) {
+				if (maze[counter - rowLength] == ' ') {		// Top neighbor
+					vertexMap[counter]->neighs.push_back({ vertexMap[counter - rowLength], stdCost });
+					vertexMap[counter - rowLength]->neighs.push_back({ vertexMap[counter], stdCost });
+				}
+				else if (maze[counter - rowLength] >= '0' && maze[counter - rowLength] <= '9') {
+					// Top neighbor is a number
+					vertexMap[counter]->neighs.push_back({ vertexMap[counter - rowLength], stdCost });
+					vertexMap[counter - rowLength]->neighs.push_back({ vertexMap[counter], stdCost });
+				}
+			}
+			if (portalMap.find(curr) != portalMap.end()) {
+				// Connect portals
+				int otherPortalIndex = portalMap[curr];	// Get the index of the other portal
+				vertexMap[counter]->neighs.push_back({ vertexMap[otherPortalIndex], portalCost });
+				vertexMap[otherPortalIndex]->neighs.push_back({ vertexMap[counter], portalCost });
+			}
+			portalMap[curr] = counter; // Record the position of this portal only after checkin
 			xCoor++;
 		}
 		else if (curr == '\n') {
@@ -48,15 +113,17 @@ string solve(string maze) {
 	}
 	yHeight = yCoor;
 
-	//cout << "Map is width: " << xWidth << " and Height: " << yHeight << endl;
-
 	Vertex* startVertex = nullptr;
 	Vertex* endVertex = nullptr;
 	unordered_map<Vertex*, Vertex*> breadCrumbs;
 	unordered_set<Vertex*> marked;
-	queue<Vertex*> Q;
+	MinPriorityQueue<Vertex*> PQ;
 
-	//	Step 0: Find start and end vertices
+	// ********************************************************
+	// **************** Dijkstra's Algorithm ******************
+	// ********************************************************
+	
+	// Step 0, find start and end vertices:
 	for (const auto& pair : vertexMap) {		// Runs in O(s) time
 		if (pair.second->row == 0 || pair.second->row == yHeight - 1 ||
 			pair.second->col == 0 || pair.second->col == xWidth - 1) {
@@ -69,25 +136,35 @@ string solve(string maze) {
 		}
 	}
 
-	// Step 1: BFS to find path from start to all vertices
-	// Step 1a: Instead of calling breadthFirstSearch(s, breadCrumbs);
-	// startVertex is s
-	// breadCrumbs is bc
-	// marked is marked
-	// Q is Q
-
+	const int infCost = 100000;
+	unordered_map<Vertex*, int> dist;
 	marked.insert(startVertex);
-	Q.push(startVertex);
 
-	while (!Q.empty()) {		// Runs in O(V + E) time
-		Vertex* x = Q.front();
-		Q.pop();
+	// Step 0.1, Initialize all distances to infinity and insert into PQ:
+	for (const auto& pair : vertexMap) {		// Runs in O(V) time
+		dist[pair.second] = infCost;
+		PQ.push(pair.second, infCost);
+	}
+	dist[startVertex] = 0; // Distance to start vertex is 0
+	PQ.decrease_key(startVertex, 0);
 
-		for (Vertex* y : x->neighs) {
-			if (marked.find(y) == marked.end()) {
-				marked.insert(y);
-				breadCrumbs[y] = x;
-				Q.push(y);
+	// Step 1: Explore the graph using a priority queue
+
+	while (!PQ.empty()) {		// Runs in O(V log V) time
+		Vertex* x = PQ.front();
+		PQ.pop();
+		marked.insert(x);
+		for (const auto& y : x->neighs) {
+			Vertex* neighbor = y.first;
+			int weight = y.second;
+			// Relaxation step
+			if (marked.find(neighbor) == marked.end()){
+				if (dist[x] + weight < dist[neighbor]){
+					// Update weight
+					dist[neighbor] = dist[x] + weight;
+					PQ.decrease_key(neighbor, dist[x] + weight);
+					breadCrumbs[neighbor] = x;
+				}
 			}
 		}
 	}
@@ -108,7 +185,7 @@ string solve(string maze) {
 		current = breadCrumbs[current];
 		//clearScreen();
 		//cout << maze << endl;
-		//std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait 1 second
+		//std::this_thread::sleep_for(std::chrono::microseconds(100)); // Wait 0.1 second
 	}
 
 	// Mark the start vertex as well
@@ -117,7 +194,7 @@ string solve(string maze) {
 	// Optional: Print out the solved maze at each step
 	//clearScreen();
 	//cout << maze << endl;
-	//std::this_thread::sleep_for(std::chrono::seconds(1)); // Wait 1 second
+	//std::this_thread::sleep_for(std::chrono::microseconds(1000)); // Wait 1 second
 
 
 	for (auto& pair : vertexMap) {
