@@ -183,18 +183,18 @@ string solve(string maze) {
 		int index = current->row * rowLength + current->col;	// Nice calculation to find its position in the original index
 		maze[index] = 'o';
 		current = breadCrumbs[current];
-		//clearScreen();
-		//cout << maze << endl;
-		//std::this_thread::sleep_for(std::chrono::microseconds(100)); // Wait 0.1 second
+		clearScreen();
+		cout << maze << endl;
+		std::this_thread::sleep_for(std::chrono::microseconds(100)); // Wait 0.1 second
 	}
 
 	// Mark the start vertex as well
 	int startIndex = startVertex->row * rowLength + startVertex->col;
 	maze[startIndex] = 'o';
 	// Optional: Print out the solved maze at each step
-	//clearScreen();
-	//cout << maze << endl;
-	//std::this_thread::sleep_for(std::chrono::microseconds(1000)); // Wait 1 second
+	clearScreen();
+	cout << maze << endl;
+	std::this_thread::sleep_for(std::chrono::microseconds(1000)); // Wait 1 second
 
 
 	for (auto& pair : vertexMap) {
